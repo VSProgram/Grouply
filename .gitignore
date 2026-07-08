@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.env
+
+# Node
+node_modules/
+frontend/dist/
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Project data (не заливать в репо)
+backend/app.db
+backend/chroma_db/
+backend/uploads/
+
+# Внутренние файлы
+.claude/
+Claude 4 API.pdf
+kodik.md
