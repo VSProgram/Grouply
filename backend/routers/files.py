@@ -1,8 +1,11 @@
+import json
 import os
 import uuid
 from pathlib import Path
+from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse as FastAPIFileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -24,10 +27,15 @@ class FileResponse(BaseModel):
     filename: str
     indexed: bool
     index_error: str | None = None
+    tags: list[str] = []
     created_at: str
 
     class Config:
         from_attributes = True
+
+
+class UpdateTagsRequest(BaseModel):
+    tags: list[str] = []
 
 
 # ---------- Helpers ----------
@@ -40,6 +48,18 @@ def _get_file_extension(filename: str) -> str:
 def _is_allowed_file(filename: str) -> bool:
     """Проверить, разрешено ли расширение файла."""
     return _get_file_extension(filename) in ALLOWED_EXTENSIONS
+
+
+def _parse_tags(raw: Optional[str]) -> list[str]:
+    """Разобрать теги из строки через запятую в список без пустых/дублей."""
+    if not raw:
+        return []
+    seen = []
+    for part in raw.split(","):
+        tag = part.strip().lstrip("#")
+        if tag and tag not in seen:
+            seen.append(tag)
+    return seen
 
 
 def _check_group_membership(user_id: str, group_id: str, db: Session) -> bool:
@@ -56,6 +76,7 @@ def _check_group_membership(user_id: str, group_id: str, db: Session) -> bool:
 def upload_file(
     group_id: str,
     file: UploadFile = File(...),
+    tags: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -100,6 +121,7 @@ def upload_file(
         filename=file.filename,
         filepath=str(file_path),
         indexed=False,
+        tags=json.dumps(_parse_tags(tags), ensure_ascii=False),
     )
     db.add(db_file)
     db.commit()
@@ -141,10 +163,65 @@ def get_group_files(
             "filename": f.filename,
             "indexed": f.indexed,
             "index_error": f.index_error,
+            "tags": json.loads(f.tags) if f.tags else [],
             "created_at": f.created_at.isoformat(),
         }
         for f in files
     ]
+
+
+@router.patch("/{file_id}/tags", response_model=FileResponse)
+def update_file_tags(
+    file_id: str,
+    body: UpdateTagsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Обновить теги файла."""
+    db_file = db.query(FileModel).filter(FileModel.id == file_id).first()
+    if not db_file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    membership = db.query(GroupMember).filter(
+        GroupMember.user_id == current_user.id,
+        GroupMember.group_id == db_file.group_id,
+    ).first()
+    if not can_manage_content(membership.role if membership else None):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    db_file.tags = json.dumps(body.tags, ensure_ascii=False)
+    db.commit()
+    db.refresh(db_file)
+
+    return {
+        "id": db_file.id,
+        "filename": db_file.filename,
+        "indexed": db_file.indexed,
+        "index_error": db_file.index_error,
+        "tags": json.loads(db_file.tags) if db_file.tags else [],
+        "created_at": db_file.created_at.isoformat(),
+    }
+
+
+@router.get("/download/{file_id}")
+def download_file(
+    file_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Скачать файл."""
+    db_file = db.query(FileModel).filter(FileModel.id == file_id).first()
+    if not db_file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    if not _check_group_membership(current_user.id, db_file.group_id, db):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    file_path = Path(db_file.filepath)
+    if not file_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File missing on disk")
+
+    return FastAPIFileResponse(file_path, filename=db_file.filename)
 
 
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)

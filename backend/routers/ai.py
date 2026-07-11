@@ -14,6 +14,7 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 class AskRequest(BaseModel):
     question: str
+    file_id: str | None = None
 
 
 class AskResponse(BaseModel):
@@ -84,7 +85,7 @@ def ask(
         )
 
     try:
-        result = ask_question(body.question, group_id, db)
+        result = ask_question(body.question, group_id, db, file_id=body.file_id)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

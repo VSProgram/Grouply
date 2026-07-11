@@ -2,7 +2,7 @@ function HomePage() {
   return (
     <main className="flex flex-col items-center justify-center min-h-screen gap-6 p-8">
       <h1 className="text-4xl font-bold text-primary-700">
-        AI Study Assistant
+        Grouply
       </h1>
       <p className="text-lg text-gray-500 max-w-md text-center">
         Загружайте учебные материалы и задавайте вопросы — AI ответит

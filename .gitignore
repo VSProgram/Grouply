@@ -23,6 +23,4 @@ backend/chroma_db/
 backend/uploads/
 
 # Внутренние файлы
-.claude/
-Claude 4 API.pdf
 kodik.md

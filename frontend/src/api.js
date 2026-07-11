@@ -78,10 +78,11 @@ export function updateMemberRole(groupId, userId, role) {
 
 // ---------- Files ----------
 
-export async function uploadFile(groupId, file) {
+export async function uploadFile(groupId, file, tags = '') {
   const token = localStorage.getItem('token')
   const formData = new FormData()
   formData.append('file', file)
+  if (tags) formData.append('tags', tags)
   const res = await fetch(`${BASE_URL}/files/upload/${groupId}`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -102,14 +103,43 @@ export function deleteFile(fileId) {
   return request('DELETE', `/files/${fileId}`)
 }
 
+export function updateFileTags(fileId, tags) {
+  return request('PATCH', `/files/${fileId}/tags`, { tags })
+}
+
+async function downloadBlob(url, filename) {
+  const token = localStorage.getItem('token')
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Download failed')
+  }
+  const blob = await res.blob()
+  const objectUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = objectUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(objectUrl)
+}
+
+export function downloadFile(fileId, filename) {
+  return downloadBlob(`${BASE_URL}/files/download/${fileId}`, filename)
+}
+
 // ---------- AI ----------
 
 export function indexFile(fileId) {
   return request('POST', `/ai/index/${fileId}`)
 }
 
-export function askQuestion(groupId, question) {
-  return request('POST', `/ai/ask/${groupId}`, { question })
+export function askQuestion(groupId, question, fileId = null) {
+  const body = fileId ? { question, file_id: fileId } : { question }
+  return request('POST', `/ai/ask/${groupId}`, body)
 }
 
 // ---------- Announcements ----------
@@ -129,6 +159,76 @@ export function updateAnnouncement(announcementId, data) {
 
 export function deleteAnnouncement(announcementId) {
   return request('DELETE', `/announcements/${announcementId}`)
+}
+
+// ---------- Subjects ----------
+
+export function getSubjects(groupId, semester = '') {
+  const query = semester ? `?semester=${encodeURIComponent(semester)}` : ''
+  return request('GET', `/subjects/${groupId}${query}`)
+}
+
+export function createSubject(groupId, data) {
+  return request('POST', `/subjects/${groupId}`, data)
+}
+
+export function deleteSubject(subjectId) {
+  return request('DELETE', `/subjects/${subjectId}`)
+}
+
+export function getSubjectFiles(groupId) {
+  return request('GET', `/subjects/${groupId}/files`)
+}
+
+// ---------- Lessons ----------
+
+export function getLessons(subjectId, type = '') {
+  const query = type ? `?type=${encodeURIComponent(type)}` : ''
+  return request('GET', `/lessons/${subjectId}${query}`)
+}
+
+export function createLesson(subjectId, data) {
+  return request('POST', `/lessons/${subjectId}`, data)
+}
+
+export function updateLesson(lessonId, data) {
+  return request('PATCH', `/lessons/${lessonId}`, data)
+}
+
+export function deleteLesson(lessonId) {
+  return request('DELETE', `/lessons/${lessonId}`)
+}
+
+export function getLessonFiles(lessonId) {
+  return request('GET', `/lessons/${lessonId}/files`)
+}
+
+export async function uploadLessonFile(lessonId, file) {
+  const token = localStorage.getItem('token')
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch(`${BASE_URL}/lessons/${lessonId}/files`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Upload failed')
+  }
+  return res.json()
+}
+
+export function deleteLessonFile(lessonId, fileId) {
+  return request('DELETE', `/lessons/${lessonId}/files/${fileId}`)
+}
+
+export function downloadLessonFile(lessonId, fileId, filename) {
+  return downloadBlob(`${BASE_URL}/lessons/${lessonId}/files/${fileId}/download`, filename)
+}
+
+export function indexLessonFile(lessonId, fileId) {
+  return request('POST', `/lessons/${lessonId}/files/${fileId}/index`)
 }
 
 // ---------- Schedule ----------

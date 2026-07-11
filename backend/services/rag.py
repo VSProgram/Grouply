@@ -8,6 +8,7 @@ from openai import OpenAI
 from sqlalchemy.orm import Session
 
 from models import File as FileModel
+from models import LessonFile
 
 GENAPI_API_KEY = os.getenv("GENAPI_API_KEY", "")
 GENAPI_BASE_URL = "https://proxy.gen-api.ru/v1"
@@ -55,8 +56,9 @@ def _split_text(text: str, chunk_size: int = 1200, overlap: int = 150) -> List[s
     return chunks
 
 
-def index_file(file_id: str, filepath: str, group_id: str, db: Session) -> None:
-    """Индексировать файл в ChromaDB и пометить File.indexed = True."""
+def _index_into_chroma(file_id: str, filepath: str, group_id: str) -> None:
+    """Извлечь текст, разбить на чанки и сохранить в ChromaDB. Общая часть
+    индексации и для файлов «Материалов», и для вложений «Предметов»."""
     text = _extract_text(filepath)
     if not text.strip():
         raise ValueError("File contains no extractable text")
@@ -77,8 +79,23 @@ def index_file(file_id: str, filepath: str, group_id: str, db: Session) -> None:
 
     collection.add(documents=chunks, ids=ids, metadatas=metadatas)
 
-    # Ставим indexed = True в БД
+
+def index_file(file_id: str, filepath: str, group_id: str, db: Session) -> None:
+    """Индексировать файл «Материалов» и пометить File.indexed = True."""
+    _index_into_chroma(file_id, filepath, group_id)
+
     db_file = db.query(FileModel).filter(FileModel.id == file_id).first()
+    if db_file:
+        db_file.indexed = True
+        db_file.index_error = None
+        db.commit()
+
+
+def index_lesson_file(file_id: str, filepath: str, group_id: str, db: Session) -> None:
+    """Индексировать вложение занятия («Предметы») и пометить LessonFile.indexed = True."""
+    _index_into_chroma(file_id, filepath, group_id)
+
+    db_file = db.query(LessonFile).filter(LessonFile.id == file_id).first()
     if db_file:
         db_file.indexed = True
         db_file.index_error = None
@@ -88,14 +105,24 @@ def index_file(file_id: str, filepath: str, group_id: str, db: Session) -> None:
 FULL_CONTEXT_CHAR_LIMIT = 12000
 
 
-def ask_question(question: str, group_id: str, db: Session) -> dict:
-    """Найти релевантные куски в ChromaDB и получить ответ от Claude."""
+def ask_question(question: str, group_id: str, db: Session, file_id: str | None = None) -> dict:
+    """Найти релевантные куски в ChromaDB и получить ответ от Claude.
+
+    Если передан file_id — поиск сужается до чанков этого файла (в обеих
+    ветках: и полного контекста, и векторного поиска), иначе ищем по всей
+    группе, как раньше.
+    """
     collection = _get_collection()
 
-    # Если весь материал группы небольшой — отдаём модели его целиком, без
-    # потерь от векторного поиска (эмбеддинг-модель по умолчанию плохо
-    # ранжирует русский текст и может не найти нужный кусок даже среди топ-N).
-    all_chunks = collection.get(where={"group_id": group_id})
+    where_filter = {"group_id": group_id}
+    if file_id:
+        where_filter = {"$and": [{"group_id": group_id}, {"file_id": file_id}]}
+
+    # Если весь материал (группы или одного файла) небольшой — отдаём модели
+    # его целиком, без потерь от векторного поиска (эмбеддинг-модель по
+    # умолчанию плохо ранжирует русский текст и может не найти нужный кусок
+    # даже среди топ-N).
+    all_chunks = collection.get(where=where_filter)
     total_chars = sum(len(d) for d in all_chunks["documents"])
 
     if all_chunks["ids"] and total_chars <= FULL_CONTEXT_CHAR_LIMIT:
@@ -109,7 +136,7 @@ def ask_question(question: str, group_id: str, db: Session) -> dict:
         results = collection.query(
             query_texts=[question],
             n_results=20,
-            where={"group_id": group_id},
+            where=where_filter,
         )
         documents = results["documents"][0] if results["documents"] else []
         metadatas = results["metadatas"][0] if results["metadatas"] else []
@@ -120,10 +147,15 @@ def ask_question(question: str, group_id: str, db: Session) -> dict:
             "sources": [],
         }
 
-    # Получаем имена файлов-источников из БД
+    # Получаем имена файлов-источников из БД — чанк мог прийти как из
+    # «Материалов» (File), так и из вложения занятия («Предметы», LessonFile)
     file_ids = list({m["file_id"] for m in metadatas})
     db_files = db.query(FileModel).filter(FileModel.id.in_(file_ids)).all()
     filename_by_id = {f.id: f.filename for f in db_files}
+    missing_ids = [fid for fid in file_ids if fid not in filename_by_id]
+    if missing_ids:
+        lesson_files = db.query(LessonFile).filter(LessonFile.id.in_(missing_ids)).all()
+        filename_by_id.update({f.id: f.filename for f in lesson_files})
     sources = [filename_by_id[fid] for fid in file_ids if fid in filename_by_id]
 
     # Формируем контекст
