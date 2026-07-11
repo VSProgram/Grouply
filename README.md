@@ -18,7 +18,31 @@
 
 ## Screenshots
 
-*Скриншоты будут добавлены позже*
+<img width="2157" height="1204" alt="image" src="https://github.com/user-attachments/assets/8fa5cb88-d972-49aa-94ff-ed7ad86a3886" />
+
+
+<img width="2158" height="1209" alt="image" src="https://github.com/user-attachments/assets/89543773-5183-4b61-bae6-45f0df0cde26" />
+
+
+<img width="2155" height="1209" alt="image" src="https://github.com/user-attachments/assets/c8559e46-0396-4604-90b6-01684818ca58" />
+
+
+<img width="2152" height="1204" alt="image" src="https://github.com/user-attachments/assets/6c455076-5111-49ab-a890-b985c9891686" />
+
+
+<img width="2152" height="1201" alt="image" src="https://github.com/user-attachments/assets/03a6bb45-d834-476e-b68e-7b41518d936c" />
+
+
+<img width="2149" height="1201" alt="image" src="https://github.com/user-attachments/assets/63bd4988-0e4b-45ad-887f-ffcbf58d4ce8" />
+
+
+<img width="2157" height="1204" alt="image" src="https://github.com/user-attachments/assets/69f49609-b6d9-4d3d-bbe6-70e86419b995" />
+
+
+<img width="2158" height="1207" alt="image" src="https://github.com/user-attachments/assets/6437db5f-d4b7-4807-8e4e-03904588d41f" />
+
+
+<img width="2155" height="1203" alt="image" src="https://github.com/user-attachments/assets/5d8bec4a-6014-45eb-b695-e9651fd5c6b5" />
 
 ## Технологический стек
 
