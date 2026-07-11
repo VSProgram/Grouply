@@ -1,5 +1,7 @@
 ﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   getGroup, getFiles, uploadFile, deleteFile, downloadFile, updateFileTags, indexFile, askQuestion,
   getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement,
@@ -350,7 +352,13 @@ function TabAI({ groupId }) {
                   : 'bg-white border rounded-2xl rounded-tl-sm px-4 py-2.5'
               }`}
             >
-              <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+              {msg.role === 'ai' ? (
+                <div className="text-sm prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+                </div>
+              ) : (
+                <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+              )}
               {msg.role === 'ai' && msg.sources?.length > 0 && (
                 <p className="text-xs text-gray-400 mt-2">
                   Источники: {msg.sources.join(', ')}
